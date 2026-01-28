@@ -154,7 +154,9 @@ class ModelManager:
                 if callable(speakers):
                     speakers = speakers()
                 languages = []
-                if hasattr(self.custom_model, "languages"):
+                if isinstance(speakers, tuple) and len(speakers) == 2:
+                    speakers, languages = speakers
+                if not languages and hasattr(self.custom_model, "languages"):
                     languages = list(getattr(self.custom_model, "languages"))
                 return list(speakers), list(languages), None
         warning = "speakers could not be enumerated"
