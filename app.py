@@ -367,6 +367,9 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.state.manager = manager
     app.state.semaphore = semaphore
+    app.state.queue_lock = asyncio.Lock()
+    app.state.queue_active = 0
+    app.state.queue_waiting = 0
 
     # Mount static files
     import os as os_module
@@ -403,16 +406,27 @@ def create_app() -> FastAPI:
 
     async def run_job(func, *args):
         try:
+            wait_start = time.time()
             # Wait up to 60 seconds for a slot (TTS can take 30-180 seconds)
+            async with app.state.queue_lock:
+                app.state.queue_waiting += 1
             await asyncio.wait_for(semaphore.acquire(), timeout=60.0)
         except asyncio.TimeoutError as exc:
+            async with app.state.queue_lock:
+                app.state.queue_waiting = max(0, app.state.queue_waiting - 1)
             raise HTTPException(status_code=429, detail="Server busy - queue full, try again in a minute") from exc
+        async with app.state.queue_lock:
+            app.state.queue_waiting = max(0, app.state.queue_waiting - 1)
+            app.state.queue_active += 1
+        wait_ms = int((time.time() - wait_start) * 1000)
         start = time.time()
         try:
             output = await run_in_threadpool(func, *args)
-            return output, time.time() - start
+            return output, time.time() - start, wait_ms
         finally:
             semaphore.release()
+            async with app.state.queue_lock:
+                app.state.queue_active = max(0, app.state.queue_active - 1)
 
     @app.get("/health")
     async def health() -> Dict[str, Any]:
@@ -428,6 +442,12 @@ def create_app() -> FastAPI:
             "design_loaded": manager._design_loaded,
             "base_loaded": manager._base_loaded,
         }
+
+        async with app.state.queue_lock:
+            queue_status = {
+                "active": app.state.queue_active,
+                "waiting": app.state.queue_waiting,
+            }
         
         return {
             "ok": True,
@@ -435,6 +455,7 @@ def create_app() -> FastAPI:
             "dtype": settings.dtype_label,
             "models_loaded": any([manager._custom_loaded, manager._design_loaded, manager._base_loaded]),
             "models_status": models_status,
+            "queue": queue_status,
             "lazy_loading": True,
             "version": settings.app_version,
             "gpu": gpu_name,
@@ -457,7 +478,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail="Only wav format is supported")
 
         logger.info("[TTS-CUSTOM] Starting synthesis...")
-        output, duration = await run_job(app.state.manager.synthesize_custom, payload)
+        output, duration, wait_ms = await run_job(app.state.manager.synthesize_custom, payload)
         logger.info("[TTS-CUSTOM] Synthesis complete, output type: %s", type(output))
         
         logger.info("[TTS-CUSTOM] Normalizing audio output...")
@@ -476,7 +497,11 @@ def create_app() -> FastAPI:
         return Response(
             content=wav_bytes,
             media_type="audio/wav",
-            headers={"Content-Disposition": "attachment; filename=tts.wav"},
+            headers={
+                "Content-Disposition": "attachment; filename=tts.wav",
+                "X-Processing-Ms": str(int(duration * 1000)),
+                "X-Queue-Wait-Ms": str(wait_ms),
+            },
         )
 
     @app.post("/tts/design")
@@ -485,7 +510,7 @@ def create_app() -> FastAPI:
         if payload.format.lower() != "wav":
             raise HTTPException(status_code=400, detail="Only wav format is supported")
 
-        output, duration = await run_job(app.state.manager.synthesize_design, payload)
+        output, duration, wait_ms = await run_job(app.state.manager.synthesize_design, payload)
         audio, sample_rate = normalize_audio_output(output)
         wav_bytes = audio_to_wav_bytes(audio, sample_rate)
         logger.info(
@@ -496,7 +521,11 @@ def create_app() -> FastAPI:
         return Response(
             content=wav_bytes,
             media_type="audio/wav",
-            headers={"Content-Disposition": "attachment; filename=tts.wav"},
+            headers={
+                "Content-Disposition": "attachment; filename=tts.wav",
+                "X-Processing-Ms": str(int(duration * 1000)),
+                "X-Queue-Wait-Ms": str(wait_ms),
+            },
         )
 
     @app.post("/tts/clone")
@@ -512,7 +541,7 @@ def create_app() -> FastAPI:
             )
 
         ref_audio_bytes = await run_in_threadpool(load_reference_audio, payload)
-        output, duration = await run_job(app.state.manager.synthesize_clone, payload, ref_audio_bytes)
+        output, duration, wait_ms = await run_job(app.state.manager.synthesize_clone, payload, ref_audio_bytes)
         audio, sample_rate = normalize_audio_output(output)
         wav_bytes = audio_to_wav_bytes(audio, sample_rate)
         logger.info(
@@ -523,7 +552,11 @@ def create_app() -> FastAPI:
         return Response(
             content=wav_bytes,
             media_type="audio/wav",
-            headers={"Content-Disposition": "attachment; filename=tts.wav"},
+            headers={
+                "Content-Disposition": "attachment; filename=tts.wav",
+                "X-Processing-Ms": str(int(duration * 1000)),
+                "X-Queue-Wait-Ms": str(wait_ms),
+            },
         )
 
     @app.exception_handler(RequestValidationError)

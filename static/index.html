@@ -406,26 +406,41 @@
    <p class="subtitle">Text to Speech API with AI Voices</p>
     
    <!-- Model Status Panel -->
-   <div class="model-status">
-     <h3>
-        Model Status
-       <button class="refresh-btn" onclick="checkStatus()">Refresh</button>
-     </h3>
-     <div class="model-indicators" id="modelIndicators">
-       <div class="model-indicator">
-         <span class="indicator-dot" id="presetIndicator"></span>
-         <span>Preset Voices Model</span>
-       </div>
-       <div class="model-indicator">
-         <span class="indicator-dot" id="designIndicator"></span>
-         <span>Voice Design Model</span>
-       </div>
-       <div class="model-indicator">
-         <span class="indicator-dot" id="baseIndicator"></span>
-         <span>Voice Clone Model</span>
-       </div>
-     </div>
-   </div>
+        <div class="model-status">
+            <h3>
+                Model Status
+                <button class="refresh-btn" onclick="checkStatus()">Refresh</button>
+            </h3>
+            <div class="model-indicators" id="modelIndicators">
+                <div class="model-indicator">
+                    <span class="indicator-dot" id="presetIndicator"></span>
+                    <span>Preset Voices Model</span>
+                </div>
+                <div class="model-indicator">
+                    <span class="indicator-dot" id="designIndicator"></span>
+                    <span>Voice Design Model</span>
+                </div>
+                <div class="model-indicator">
+                    <span class="indicator-dot" id="baseIndicator"></span>
+                    <span>Voice Clone Model</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="model-status">
+            <h3>Queue Status</h3>
+            <div class="model-indicators">
+                <div class="model-indicator">
+                    <span>Active: <strong id="queueActive">0</strong></span>
+                </div>
+                <div class="model-indicator">
+                    <span>Waiting: <strong id="queueWaiting">0</strong></span>
+                </div>
+                <div class="model-indicator">
+                    <span id="queueNote" style="color:#888;">No requests in line</span>
+                </div>
+            </div>
+        </div>
     
    <!-- Mode Selector -->
    <div class="mode-selector">
@@ -489,12 +504,13 @@
      </p>
    </div>
     
-   <div class="result" id="result">
-     <p style="margin-bottom: 10px; font-weight: 600; color: #28a745;">Audio generated successfully!</p>
-     <audio id="audioPlayer" controls></audio>
-     <br>
-     <a href="#" class="download-btn" id="downloadBtn" download="tts.wav">Download WAV File</a>
-   </div>
+        <div class="result" id="result">
+            <p style="margin-bottom: 10px; font-weight: 600; color: #28a745;">Audio generated successfully!</p>
+            <p id="timingInfo" style="margin-bottom: 10px; color: #666; font-size: 13px;"></p>
+            <audio id="audioPlayer" controls></audio>
+            <br>
+            <a href="#" class="download-btn" id="downloadBtn" download="tts.wav">Download WAV File</a>
+        </div>
     
    <div class="error" id="error"></div>
     
@@ -595,6 +611,21 @@ Content-Type: audio/wav
           designDot.className = 'indicator-dot' + (data.models_status.design_loaded ? ' loaded' : '');
           baseDot.className = 'indicator-dot' + (data.models_status.base_loaded ? ' loaded' : '');
         }
+
+        if (data.queue) {
+          const activeEl = document.getElementById('queueActive');
+          const waitingEl = document.getElementById('queueWaiting');
+          const noteEl = document.getElementById('queueNote');
+          activeEl.textContent = data.queue.active;
+          waitingEl.textContent = data.queue.waiting;
+          if (data.queue.waiting > 0) {
+            noteEl.textContent = 'Requests are in line. Longer texts may take a while.';
+          } else if (data.queue.active > 0) {
+            noteEl.textContent = 'Processing in progress.';
+          } else {
+            noteEl.textContent = 'No requests in line.';
+          }
+        }
         
       } catch (err) {
         console.error('Failed to check status:', err);
@@ -677,7 +708,8 @@ Content-Type: audio/wav
           };
         }
         
-         console.log('Sending request to:', `${API_BASE}${endpoint}`);
+        const requestStart = performance.now();
+        console.log('Sending request to:', `${API_BASE}${endpoint}`);
         console.log('Request body:', body);
         
         const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -690,6 +722,8 @@ Content-Type: audio/wav
         
         console.log('Response status:', response.status);
         console.log('Response headers:', [...response.headers.entries()]);
+        const serverMs = response.headers.get('x-processing-ms');
+        const queueMs = response.headers.get('x-queue-wait-ms');
         
         if (!response.ok) {
           const errorText = await response.text();
@@ -714,6 +748,17 @@ Content-Type: audio/wav
         const audioPlayer = document.getElementById('audioPlayer');
         audioPlayer.src = audioUrl;
         document.getElementById('downloadBtn').href = audioUrl;
+        const totalMs = Math.round(performance.now() - requestStart);
+        const timingInfo = document.getElementById('timingInfo');
+        const parts = [];
+        if (serverMs) {
+          parts.push(`Server: ${serverMs} ms`);
+        }
+        if (queueMs) {
+          parts.push(`Queue wait: ${queueMs} ms`);
+        }
+        parts.push(`Total: ${totalMs} ms`);
+        timingInfo.textContent = parts.join(' | ');
         document.getElementById('result').classList.add('active');
         
         // Add detailed error handler for audio loading

@@ -51,8 +51,8 @@ RUN apt-get update \
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir transformers accelerate
-RUN pip uninstall -y torchvision torchaudio || true
-RUN pip install --no-cache-dir torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN pip uninstall -y torch torchvision torchaudio || true
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.4
 COPY . /app
 EXPOSE 8000
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
