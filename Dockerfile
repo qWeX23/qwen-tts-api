@@ -33,7 +33,7 @@ COPY . /app
 EXPOSE 8000
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
-FROM rocm/pytorch:rocm5.7_ubuntu22.04_py3.10_pytorch_2.1.1 AS rocm
+FROM rocm/pytorch:rocm6.4.3_ubuntu22.04_py3.10_pytorch_release_2.3.0 AS rocm
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
