@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qwen3-TTS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        textarea, input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        textarea:focus, input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .mode-btn:hover:not(.active) {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        
+        button.generate-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button.generate-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button.generate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            display: none;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result.active {
+            display: block;
+        }
+        
+        .result audio {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        
+        .download-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        .download-btn:hover {
+            background: #218838;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .error.active {
+            display: block;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .status.loading {
+            color: #667eea;
+        }
+        
+        .mode-specific {
+            display: none;
+        }
+        
+        .mode-specific.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Qwen3-TTS</h1>
+        <p class="subtitle">Text to Speech with AI</p>
+        
+        <div class="status" id="status">Checking API status...</div>
+        
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="custom">Custom Voice</button>
+            <button class="mode-btn" data-mode="design">Voice Design</button>
+        </div>
+        
+        <div id="custom-mode" class="mode-specific active">
+            <div class="form-group">
+                <label for="speaker">Speaker</label>
+                <select id="speaker">
+                    <option value="Vivian">Vivian (Chinese)</option>
+                    <option value="Serena">Serena (Chinese)</option>
+                    <option value="Ryan" selected>Ryan (English)</option>
+                    <option value="Aiden">Aiden (English)</option>
+                    <option value="Ono_Anna">Ono Anna (Japanese)</option>
+                    <option value="Sohee">Sohee (Korean)</option>
+                    <option value="Uncle_Fu">Uncle Fu (Chinese)</option>
+                    <option value="Dylan">Dylan (Chinese - Beijing)</option>
+                    <option value="Eric">Eric (Chinese - Sichuan)</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="text">Text to Speak</label>
+            <textarea id="text" placeholder="Enter the text you want to convert to speech..."></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="instruct">Instructions (optional)</label>
+            <input type="text" id="instruct" placeholder="e.g., 'Speak with excitement' or 'Use a calm tone'">
+        </div>
+        
+        <button class="generate-btn" id="generateBtn">Generate Speech</button>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Generating speech...<br><small>First request may take 30-60 seconds to load the model</small></p>
+        </div>
+        
+        <div class="result" id="result">
+            <audio id="audioPlayer" controls></audio>
+            <br>
+            <a href="#" class="download-btn" id="downloadBtn" download="tts.wav">Download WAV</a>
+        </div>
+        
+        <div class="error" id="error"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentMode = 'custom';
+        
+        // Check API status
+        async function checkStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                const statusEl = document.getElementById('status');
+                
+                if (data.ok) {
+                    const loaded = data.models_loaded ? 'Models loaded' : 'Ready (lazy loading)';
+                    statusEl.textContent = `✓ API Online - ${loaded}`;
+                    statusEl.className = 'status';
+                } else {
+                    statusEl.textContent = '⚠ API issue detected';
+                    statusEl.style.color = '#ffc107';
+                }
+            } catch (err) {
+                document.getElementById('status').textContent = '✗ Cannot connect to API';
+                document.getElementById('status').style.color = '#dc3545';
+            }
+        }
+        
+        checkStatus();
+        
+        // Mode switching
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMode = btn.dataset.mode;
+                
+                document.querySelectorAll('.mode-specific').forEach(el => el.classList.remove('active'));
+                if (currentMode === 'custom') {
+                    document.getElementById('custom-mode').classList.add('active');
+                }
+            });
+        });
+        
+        // Generate speech
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const text = document.getElementById('text').value.trim();
+            const instruct = document.getElementById('instruct').value.trim();
+            const speaker = document.getElementById('speaker').value;
+            
+            if (!text) {
+                showError('Please enter some text');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('result').classList.remove('active');
+            document.getElementById('error').classList.remove('active');
+            document.getElementById('generateBtn').disabled = true;
+            
+            try {
+                let endpoint, body;
+                
+                if (currentMode === 'custom') {
+                    endpoint = '/tts/custom';
+                    body = {
+                        text: text,
+                        speaker: speaker,
+                        instruct: instruct || null,
+                        format: 'wav'
+                    };
+                } else {
+                    endpoint = '/tts/design';
+                    body = {
+                        text: text,
+                        instruct: instruct || 'Speak naturally',
+                        format: 'wav'
+                    };
+                }
+                
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `HTTP ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                
+                // Show result
+                document.getElementById('audioPlayer').src = audioUrl;
+                document.getElementById('downloadBtn').href = audioUrl;
+                document.getElementById('result').classList.add('active');
+                
+                // Auto-play
+                document.getElementById('audioPlayer').play();
+                
+            } catch (err) {
+                showError('Error: ' + err.message);
+            } finally {
+                document.getElementById('loading').classList.remove('active');
+                document.getElementById('generateBtn').disabled = false;
+            }
+        });
+        
+        function showError(message) {
+            const errorEl = document.getElementById('error');
+            errorEl.textContent = message;
+            errorEl.classList.add('active');
+            setTimeout(() => errorEl.classList.remove('active'), 5000);
+        }
+    </script>
+</body>
+</html>

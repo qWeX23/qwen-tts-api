@@ -14,6 +14,8 @@ import numpy as np
 import requests
 import soundfile as sf
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, field_validator
 from starlette.requests import Request as StarletteRequest
@@ -374,6 +376,19 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.state.manager = manager
     app.state.semaphore = semaphore
+
+    # Mount static files
+    import os as os_module
+    static_dir = os_module.path.join(os_module.path.dirname(__file__), "static")
+    if os_module.path.exists(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    @app.get("/")
+    async def root():
+        index_path = os_module.path.join(static_dir, "index.html")
+        if os_module.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"message": "Qwen3-TTS API", "docs": "/docs", "health": "/health"}
 
     @app.middleware("http")
     async def enforce_api_key(request: Request, call_next):
