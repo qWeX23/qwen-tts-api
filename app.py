@@ -122,9 +122,7 @@ class ModelManager:
             self.custom_model = dummy
             self.design_model = dummy
             self.base_model = dummy
-            self._custom_loaded = True
-            self._design_loaded = True
-            self._base_loaded = True
+            # Dummy models are available but not "loaded" - keep flags False for accurate status
     
     def _get_model_class(self):
         """Lazy import to avoid loading at startup"""

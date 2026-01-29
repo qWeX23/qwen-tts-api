@@ -1,736 +1,736 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Qwen3-TTS - Text to Speech API</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 700px;
-            width: 100%;
-            margin-top: 20px;
-        }
-        
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        
-        .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-        
-        /* Model Status Panel */
-        .model-status {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 25px;
-            border: 2px solid #e9ecef;
-        }
-        
-        .model-status h3 {
-            font-size: 14px;
-            color: #555;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .model-indicators {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .model-indicator {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            color: #666;
-        }
-        
-        .indicator-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #dc3545;
-            transition: background 0.3s;
-        }
-        
-        .indicator-dot.loaded {
-            background: #28a745;
-        }
-        
-        .indicator-dot.loading {
-            background: #ffc107;
-            animation: pulse 1s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .refresh-btn {
-            margin-left: auto;
-            background: none;
-            border: 1px solid #ddd;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .refresh-btn:hover {
-            background: #e9ecef;
-        }
-        
-        /* Mode Selector */
-        .mode-selector {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .mode-btn {
-            flex: 1;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            background: white;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: 600;
-            font-size: 14px;
-        }
-        
-        .mode-btn.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-        
-        .mode-btn:hover:not(.active) {
-            border-color: #667eea;
-            color: #667eea;
-        }
-        
-        /* Mode Description */
-        .mode-description {
-            background: #e8f4f8;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 0 8px 8px 0;
-            font-size: 14px;
-            line-height: 1.6;
-            color: #555;
-        }
-        
-        .mode-description h4 {
-            color: #333;
-            margin-bottom: 8px;
-            font-size: 15px;
-        }
-        
-        .mode-description code {
-            background: #f4f4f4;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 12px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        
-        textarea, input, select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-        
-        textarea:focus, input:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-        
-        .hint {
-            font-size: 12px;
-            color: #888;
-            margin-top: 5px;
-        }
-        
-        button.generate-btn {
-            width: 100%;
-            padding: 18px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-top: 10px;
-        }
-        
-        button.generate-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        button.generate-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 30px;
-            color: #667eea;
-            display: none;
-        }
-        
-        .loading.active {
-            display: block;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .result {
-            margin-top: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            display: none;
-        }
-        
-        .result.active {
-            display: block;
-        }
-        
-        .result audio {
-            width: 100%;
-            margin-bottom: 15px;
-        }
-        
-        .download-btn {
-            display: inline-block;
-            padding: 12px 24px;
-            background: #28a745;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 500;
-            transition: background 0.3s;
-        }
-        
-        .download-btn:hover {
-            background: #218838;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            display: none;
-        }
-        
-        .error.active {
-            display: block;
-        }
-        
-        .mode-specific {
-            display: none;
-        }
-        
-        .mode-specific.active {
-            display: block;
-        }
-        
-        /* API Section */
-        .api-section {
-            margin-top: 30px;
-            border-top: 2px solid #e9ecef;
-            padding-top: 20px;
-        }
-        
-        .api-toggle {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            cursor: pointer;
-            color: #667eea;
-            font-weight: 500;
-            margin-bottom: 15px;
-        }
-        
-        .api-toggle:hover {
-            color: #764ba2;
-        }
-        
-        .api-toggle-icon {
-            transition: transform 0.3s;
-        }
-        
-        .api-toggle-icon.open {
-            transform: rotate(90deg);
-        }
-        
-        .api-content {
-            display: none;
-            background: #1e1e1e;
-            border-radius: 8px;
-            padding: 20px;
-            color: #d4d4d4;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 13px;
-            line-height: 1.5;
-            overflow-x: auto;
-        }
-        
-        .api-content.active {
-            display: block;
-        }
-        
-        .api-content h4 {
-            color: #9cdcfe;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        
-        .api-content pre {
-            background: #2d2d2d;
-            padding: 15px;
-            border-radius: 6px;
-            overflow-x: auto;
-            margin-bottom: 15px;
-        }
-        
-        .api-content code {
-            color: #ce9178;
-        }
-        
-        .api-content .comment {
-            color: #6a9955;
-        }
-        
-        .api-content .key {
-            color: #9cdcfe;
-        }
-        
-        .api-content .string {
-            color: #ce9178;
-        }
-        
-        .copy-btn {
-            float: right;
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        
-        .copy-btn:hover {
-            background: #764ba2;
-        }
-    </style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Qwen3-TTS - Text to Speech API</title>
+ <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 700px;
+      width: 100%;
+      margin-top: 20px;
+    }
+    
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 5px;
+    }
+    
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    /* Model Status Panel */
+    .model-status {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 25px;
+      border: 2px solid #e9ecef;
+    }
+    
+    .model-status h3 {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .model-indicators {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    
+    .model-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #666;
+    }
+    
+    .indicator-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #dc3545;
+      transition: background 0.3s;
+    }
+    
+    .indicator-dot.loaded {
+      background: #28a745;
+    }
+    
+    .indicator-dot.loading {
+      background: #ffc107;
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .refresh-btn {
+      margin-left: auto;
+      background: none;
+      border: 1px solid #ddd;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #666;
+    }
+    
+    .refresh-btn:hover {
+      background: #e9ecef;
+    }
+    
+    /* Mode Selector */
+    .mode-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .mode-btn {
+      flex: 1;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      background: white;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .mode-btn.active {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+    
+    .mode-btn:hover:not(.active) {
+      border-color: #667eea;
+      color: #667eea;
+    }
+    
+    /* Mode Description */
+    .mode-description {
+      background: #e8f4f8;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 0 8px 8px 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #555;
+    }
+    
+    .mode-description h4 {
+      color: #333;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+    
+    .mode-description code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #555;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    
+    textarea, input, select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+    
+    textarea:focus, input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    
+    .hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+    
+    button.generate-btn {
+      width: 100%;
+      padding: 18px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 10px;
+    }
+    
+    button.generate-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    button.generate-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 30px;
+      color: #667eea;
+      display: none;
+    }
+    
+    .loading.active {
+      display: block;
+    }
+    
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .result {
+      margin-top: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      display: none;
+    }
+    
+    .result.active {
+      display: block;
+    }
+    
+    .result audio {
+      width: 100%;
+      margin-bottom: 15px;
+    }
+    
+    .download-btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #28a745;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+    
+    .download-btn:hover {
+      background: #218838;
+    }
+    
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      display: none;
+    }
+    
+    .error.active {
+      display: block;
+    }
+    
+    .mode-specific {
+      display: none;
+    }
+    
+    .mode-specific.active {
+      display: block;
+    }
+    
+    /* API Section */
+    .api-section {
+      margin-top: 30px;
+      border-top: 2px solid #e9ecef;
+      padding-top: 20px;
+    }
+    
+    .api-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      color: #667eea;
+      font-weight: 500;
+      margin-bottom: 15px;
+    }
+    
+    .api-toggle:hover {
+      color: #764ba2;
+    }
+    
+    .api-toggle-icon {
+      transition: transform 0.3s;
+    }
+    
+    .api-toggle-icon.open {
+      transform: rotate(90deg);
+    }
+    
+    .api-content {
+      display: none;
+      background: #1e1e1e;
+      border-radius: 8px;
+      padding: 20px;
+      color: #d4d4d4;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-x: auto;
+    }
+    
+    .api-content.active {
+      display: block;
+    }
+    
+    .api-content h4 {
+      color: #9cdcfe;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    
+    .api-content pre {
+      background: #2d2d2d;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-bottom: 15px;
+    }
+    
+    .api-content code {
+      color: #ce9178;
+    }
+    
+    .api-content .comment {
+      color: #6a9955;
+    }
+    
+    .api-content .key {
+      color: #9cdcfe;
+    }
+    
+    .api-content .string {
+      color: #ce9178;
+    }
+    
+    .copy-btn {
+      float: right;
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .copy-btn:hover {
+      background: #764ba2;
+    }
+ </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Qwen3-TTS</h1>
-        <p class="subtitle">Text to Speech API with AI Voices</p>
-        
-        <!-- Model Status Panel -->
-        <div class="model-status">
-            <h3>
-                <span>🤖</span> Model Status
-                <button class="refresh-btn" onclick="checkStatus()">↻ Refresh</button>
-            </h3>
-            <div class="model-indicators" id="modelIndicators">
-                <div class="model-indicator">
-                    <span class="indicator-dot" id="presetIndicator"></span>
-                    <span>Preset Voices Model</span>
-                </div>
-                <div class="model-indicator">
-                    <span class="indicator-dot" id="designIndicator"></span>
-                    <span>Voice Design Model</span>
-                </div>
-                <div class="model-indicator">
-                    <span class="indicator-dot" id="baseIndicator"></span>
-                    <span>Voice Clone Model</span>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Mode Selector -->
-        <div class="mode-selector">
-            <button class="mode-btn active" data-mode="preset">🔊 Preset Voices</button>
-            <button class="mode-btn" data-mode="design">🎨 Voice Design</button>
-        </div>
-        
-        <!-- Mode Descriptions -->
-        <div id="preset-description" class="mode-description">
-            <h4>What is Preset Voices?</h4>
-            <p>Choose from 9 built-in AI speakers (Ryan, Vivian, Aiden, etc.) to generate speech. Each speaker has a unique voice optimized for specific languages.</p>
-            <p style="margin-top: 8px;"><strong>Best for:</strong> Quick voice generation with consistent, high-quality speakers.</p>
-        </div>
-        
-        <div id="design-description" class="mode-description" style="display: none;">
-            <h4>What is Voice Design?</h4>
-            <p>Describe the voice you want (e.g., "A deep, calm male voice with a British accent") and the AI will create it for you.</p>
-            <p style="margin-top: 8px;"><strong>Best for:</strong> Creating custom voices for characters, specific moods, or unique speaking styles.</p>
-        </div>
-        
-        <!-- Preset Voices Mode -->
-        <div id="preset-mode" class="mode-specific active">
-            <div class="form-group">
-                <label for="speaker">Select a Speaker</label>
-                <select id="speaker">
-                    <option value="Ryan" selected>Ryan - Dynamic English male voice</option>
-                    <option value="Aiden">Aiden - Sunny American male voice</option>
-                    <option value="Vivian">Vivian - Bright Chinese female voice</option>
-                    <option value="Serena">Serena - Warm, gentle Chinese female voice</option>
-                    <option value="Ono_Anna">Ono Anna - Playful Japanese female voice</option>
-                    <option value="Sohee">Sohee - Warm Korean female voice</option>
-                    <option value="Uncle_Fu">Uncle Fu - Seasoned male voice (Chinese)</option>
-                    <option value="Dylan">Dylan - Youthful Beijing male voice</option>
-                    <option value="Eric">Eric - Lively Chengdu male voice</option>
-                </select>
-                <p class="hint">Choose a speaker that matches your text language for best results</p>
-            </div>
-        </div>
-        
-        <!-- Common Form Elements -->
-        <div class="form-group">
-            <label for="text">Text to Convert to Speech</label>
-            <textarea id="text" placeholder="Enter the text you want to convert to speech... Example: Hello, welcome to the world of AI-powered text to speech!"></textarea>
-            <p class="hint">Tip: Match your text language to the speaker's native language</p>
-        </div>
-        
-        <div class="form-group">
-            <label for="instruct">Speaking Instructions (Optional)</label>
-            <input type="text" id="instruct" placeholder="e.g., 'Speak with excitement' or 'Use a calm, professional tone'">
-            <p class="hint">Guide the AI on how to deliver the text - tone, emotion, style</p>
-        </div>
-        
-        <button class="generate-btn" id="generateBtn">🎵 Generate Speech</button>
-        
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p><strong>Generating your audio...</strong></p>
-            <p style="font-size: 14px; margin-top: 10px; color: #888;">
-                First request loads the AI model (30-60 sec)<br>
-                Subsequent requests are much faster
-            </p>
-        </div>
-        
-        <div class="result" id="result">
-            <p style="margin-bottom: 10px; font-weight: 600; color: #28a745;">✓ Audio generated successfully!</p>
-            <audio id="audioPlayer" controls></audio>
-            <br>
-            <a href="#" class="download-btn" id="downloadBtn" download="tts.wav">⬇️ Download WAV File</a>
-        </div>
-        
-        <div class="error" id="error"></div>
-        
-        <!-- API Learning Section -->
-        <div class="api-section">
-            <div class="api-toggle" onclick="toggleApi()">
-                <span class="api-toggle-icon" id="apiToggleIcon">▶</span>
-                <span>📚 Show API Examples - Learn how to use this programmatically</span>
-            </div>
-            
-            <div class="api-content" id="apiContent">
-                <div id="preset-api" class="api-mode active">
-                    <h4>Preset Voices API</h4>
-                    <p class="comment">// POST /tts/custom - Generate speech with preset voice with a built-in speaker</p>
-                    <button class="copy-btn" onclick="copyCode('custom-curl')">Copy</button>
-                    <pre id="custom-curl"><code>curl -X POST http://localhost:8000/tts/custom \
-  -H "Content-Type: application/json" \
-  -d '{
-    <span class="key">"text"</span>: <span class="string">"Your text here"</span>,
-    <span class="key">"speaker"</span>: <span class="string">"Ryan"</span>,
-    <span class="key">"instruct"</span>: <span class="string">"Speak with excitement"</span>,
-    <span class="key">"format"</span>: <span class="string">"wav"</span>
-  }'</code></pre>
-                    
-                    <h4>Response</h4>
-                    <p class="comment">// Returns: WAV audio file (audio/wav)</p>
-                    <pre><code>HTTP/1.1 200 OK
+ <div class="container">
+   <h1>Qwen3-TTS</h1>
+   <p class="subtitle">Text to Speech API with AI Voices</p>
+    
+   <!-- Model Status Panel -->
+   <div class="model-status">
+     <h3>
+        Model Status
+       <button class="refresh-btn" onclick="checkStatus()">Refresh</button>
+     </h3>
+     <div class="model-indicators" id="modelIndicators">
+       <div class="model-indicator">
+         <span class="indicator-dot" id="presetIndicator"></span>
+         <span>Preset Voices Model</span>
+       </div>
+       <div class="model-indicator">
+         <span class="indicator-dot" id="designIndicator"></span>
+         <span>Voice Design Model</span>
+       </div>
+       <div class="model-indicator">
+         <span class="indicator-dot" id="baseIndicator"></span>
+         <span>Voice Clone Model</span>
+       </div>
+     </div>
+   </div>
+    
+   <!-- Mode Selector -->
+   <div class="mode-selector">
+     <button class="mode-btn active" data-mode="preset">Preset Voices</button>
+     <button class="mode-btn" data-mode="design">Voice Design</button>
+   </div>
+    
+   <!-- Mode Descriptions -->
+   <div id="preset-description" class="mode-description">
+     <h4>What is Preset Voices?</h4>
+     <p>Choose from 9 built-in AI speakers (Ryan, Vivian, Aiden, etc.) to generate speech. Each speaker has a unique voice optimized for specific languages.</p>
+     <p style="margin-top: 8px;"><strong>Best for:</strong>Quick voice generation with consistent, high-quality speakers.</p>
+   </div>
+    
+   <div id="design-description" class="mode-description" style="display: none;">
+     <h4>What is Voice Design?</h4>
+     <p>Describe the voice you want (e.g., "A deep, calm male voice with a British accent") and the AI will create it for you.</p>
+     <p style="margin-top: 8px;"><strong>Best for:</strong>Creating custom voices for characters, specific moods, or unique speaking styles.</p>
+   </div>
+    
+   <!-- Preset Voices Mode -->
+   <div id="preset-mode" class="mode-specific active">
+     <div class="form-group">
+       <label for="speaker">Select a Speaker</label>
+       <select id="speaker">
+         <option value="Ryan" selected>Ryan - Dynamic English male voice</option>
+         <option value="Aiden">Aiden - Sunny American male voice</option>
+         <option value="Vivian">Vivian - Bright Chinese female voice</option>
+         <option value="Serena">Serena - Warm, gentle Chinese female voice</option>
+         <option value="Ono_Anna">Ono Anna - Playful Japanese female voice</option>
+         <option value="Sohee">Sohee - Warm Korean female voice</option>
+         <option value="Uncle_Fu">Uncle Fu - Seasoned male voice (Chinese)</option>
+         <option value="Dylan">Dylan - Youthful Beijing male voice</option>
+         <option value="Eric">Eric - Lively Chengdu male voice</option>
+       </select>
+       <p class="hint">Choose a speaker that matches your text language for best results</p>
+     </div>
+   </div>
+    
+   <!-- Common Form Elements -->
+   <div class="form-group">
+     <label for="text">Text to Convert to Speech</label>
+     <textarea id="text" placeholder="Enter the text you want to convert to speech... Example: Hello, welcome to the world of AI-powered text to speech!"></textarea>
+     <p class="hint">Tip: Match your text language to the speaker's native language</p>
+   </div>
+    
+   <div class="form-group">
+     <label for="instruct">Speaking Instructions (Optional)</label>
+     <input type="text" id="instruct" placeholder="e.g., 'Speak with excitement' or 'Use a calm, professional tone'">
+     <p class="hint">Guide the AI on how to deliver the text - tone, emotion, style</p>
+   </div>
+    
+   <button class="generate-btn" id="generateBtn">Generate Speech</button>
+    
+   <div class="loading" id="loading">
+     <div class="spinner"></div>
+     <p><strong>Generating your audio...</strong></p>
+     <p style="font-size: 14px; margin-top: 10px; color: #888;">
+        First request loads the AI model (30-60 sec)<br>
+        Subsequent requests are much faster
+     </p>
+   </div>
+    
+   <div class="result" id="result">
+     <p style="margin-bottom: 10px; font-weight: 600; color: #28a745;">Audio generated successfully!</p>
+     <audio id="audioPlayer" controls></audio>
+     <br>
+     <a href="#" class="download-btn" id="downloadBtn" download="tts.wav">Download WAV File</a>
+   </div>
+    
+   <div class="error" id="error"></div>
+    
+   <!-- API Learning Section -->
+   <div class="api-section">
+     <div class="api-toggle" onclick="toggleApi()">
+       <span class="api-toggle-icon" id="apiToggleIcon"></span>
+       <span>Show API Examples - Learn how to use this programmatically</span>
+     </div>
+      
+     <div class="api-content" id="apiContent">
+       <div id="preset-api" class="api-mode active">
+         <h4>Preset Voices API</h4>
+         <p class="comment">// POST /tts/custom - Generate speech with preset voice with a built-in speaker</p>
+         <button class="copy-btn" onclick="copyCode('custom-curl')">Copy</button>
+         <pre id="custom-curl"><code>curl -X POST http://localhost:8000/tts/custom \
+ -H "Content-Type: application/json" \
+ -d '{
+ <span class="key">"text"</span>:<span class="string">"Your text here"</span>,
+ <span class="key">"speaker"</span>:<span class="string">"Ryan"</span>,
+ <span class="key">"instruct"</span>:<span class="string">"Speak with excitement"</span>,
+ <span class="key">"format"</span>:<span class="string">"wav"</span>
+ }'</code></pre>
+          
+         <h4>Response</h4>
+         <p class="comment">// Returns: WAV audio file (audio/wav)</p>
+         <pre><code>HTTP/1.1 200 OK
 Content-Type: audio/wav
 Content-Disposition: attachment; filename=tts.wav
 
 [Binary WAV data...]</code></pre>
-                    
-                    <h4>Available Speakers</h4>
-                    <pre><code>GET /voices
+          
+         <h4>Available Speakers</h4>
+         <pre><code>GET /voices
 
 <span class="comment">// Returns list of available speakers</span>
 {
-  <span class="key">"speakers"</span>: [<span class="string">"Ryan"</span>, <span class="string">"Vivian"</span>, <span class="string">"Aiden"</span>, ...],
-  <span class="key">"languages"</span>: [<span class="string">"English"</span>, <span class="string">"Chinese"</span>, ...]
+<span class="key">"speakers"</span>: [<span class="string">"Ryan"</span>,<span class="string">"Vivian"</span>,<span class="string">"Aiden"</span>, ...],
+<span class="key">"languages"</span>: [<span class="string">"English"</span>,<span class="string">"Chinese"</span>, ...]
 }</code></pre>
-                </div>
-                
-                <div id="design-api" class="api-mode" style="display: none;">
-                    <h4>Voice Design API</h4>
-                    <p class="comment">// POST /tts/design - Generate speech with custom voice description</p>
-                    <button class="copy-btn" onclick="copyCode('design-curl')">Copy</button>
-                    <pre id="design-curl"><code>curl -X POST http://localhost:8000/tts/design \
-  -H "Content-Type: application/json" \
-  -d '{
-    <span class="key">"text"</span>: <span class="string">"Your text here"</span>,
-    <span class="key">"instruct"</span>: <span class="string">"A deep, calm British male voice with authority"</span>,
-    <span class="key">"format"</span>: <span class="string">"wav"</span>
-  }'</code></pre>
-                    
-                    <h4>Response</h4>
-                    <p class="comment">// Returns: WAV audio file with your custom-designed voice</p>
-                    <pre><code>HTTP/1.1 200 OK
+       </div>
+        
+       <div id="design-api" class="api-mode" style="display: none;">
+         <h4>Voice Design API</h4>
+         <p class="comment">// POST /tts/design - Generate speech with custom voice description</p>
+         <button class="copy-btn" onclick="copyCode('design-curl')">Copy</button>
+         <pre id="design-curl"><code>curl -X POST http://localhost:8000/tts/design \
+ -H "Content-Type: application/json" \
+ -d '{
+ <span class="key">"text"</span>:<span class="string">"Your text here"</span>,
+ <span class="key">"instruct"</span>:<span class="string">"A deep, calm British male voice with authority"</span>,
+ <span class="key">"format"</span>:<span class="string">"wav"</span>
+ }'</code></pre>
+          
+         <h4>Response</h4>
+         <p class="comment">// Returns: WAV audio file with your custom-designed voice</p>
+         <pre><code>HTTP/1.1 200 OK
 Content-Type: audio/wav
 
 [Binary WAV data...]</code></pre>
-                </div>
-                
-                <h4>Health Check</h4>
-                <pre><code>GET /health
+       </div>
+        
+       <h4>Health Check</h4>
+       <pre><code>GET /health
 
 <span class="comment">// Check API status and which models are loaded</span>
 {
-  <span class="key">"ok"</span>: true,
-  <span class="key">"device"</span>: <span class="string">"cpu"</span>,
-  <span class="key">"models_loaded"</span>: true,
-  <span class="key">"models_status"</span>: {
-    <span class="key">"custom_loaded"</span>: true,
-    <span class="key">"design_loaded"</span>: false,
-    <span class="key">"base_loaded"</span>: false
-  }
+<span class="key">"ok"</span>: true,
+<span class="key">"device"</span>:<span class="string">"cpu"</span>,
+<span class="key">"models_loaded"</span>: true,
+<span class="key">"models_status"</span>: {
+ <span class="key">"custom_loaded"</span>: true,
+ <span class="key">"design_loaded"</span>: false,
+ <span class="key">"base_loaded"</span>: false
+ }
 }</code></pre>
-            </div>
-        </div>
-    </div>
+     </div>
+   </div>
+ </div>
 
-    <script>
-        const API_BASE = window.location.origin;
-        let currentMode = 'preset';
+ <script>
+    const API_BASE = window.location.origin;
+    let currentMode = 'preset';
+    
+    // Poll model status every 5 seconds
+    async function checkStatus() {
+      try {
+        const response = await fetch(`${API_BASE}/health`);
+        const data = await response.json();
         
-        // Poll model status every 5 seconds
-        async function checkStatus() {
-            try {
-                const response = await fetch(`${API_BASE}/health`);
-                const data = await response.json();
-                
-                // Update model indicators
-                const customDot = document.getElementById('presetIndicator');
-                const designDot = document.getElementById('designIndicator');
-                const baseDot = document.getElementById('baseIndicator');
-                
-                if (data.models_status) {
-                    customDot.className = 'indicator-dot' + (data.models_status.custom_loaded ? ' loaded' : '');
-                    designDot.className = 'indicator-dot' + (data.models_status.design_loaded ? ' loaded' : '');
-                    baseDot.className = 'indicator-dot' + (data.models_status.base_loaded ? ' loaded' : '');
-                }
-                
-            } catch (err) {
-                console.error('Failed to check status:', err);
-            }
+        // Update model indicators
+        const customDot = document.getElementById('presetIndicator');
+        const designDot = document.getElementById('designIndicator');
+        const baseDot = document.getElementById('baseIndicator');
+        
+        if (data.models_status) {
+          customDot.className = 'indicator-dot' + (data.models_status.custom_loaded ? ' loaded' : '');
+          designDot.className = 'indicator-dot' + (data.models_status.design_loaded ? ' loaded' : '');
+          baseDot.className = 'indicator-dot' + (data.models_status.base_loaded ? ' loaded' : '');
         }
         
-        // Check status immediately and then every 5 seconds
-        checkStatus();
-        setInterval(checkStatus, 5000);
+      } catch (err) {
+        console.error('Failed to check status:', err);
+      }
+    }
+    
+    // Check status immediately and then every 5 seconds
+    checkStatus();
+    setInterval(checkStatus, 5000);
+    
+    // Mode switching
+    document.querySelectorAll('.mode-btn').forEach(btn =>{
+      btn.addEventListener('click', () =>{
+        document.querySelectorAll('.mode-btn').forEach(b =>b.classList.remove('active'));
+        btn.classList.add('active');
+        currentMode = btn.dataset.mode;
         
-        // Mode switching
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentMode = btn.dataset.mode;
-                
-                // Toggle mode-specific content
-                document.querySelectorAll('.mode-specific').forEach(el => el.classList.remove('active'));
-                if (currentMode === 'preset') {
-                    document.getElementById('preset-mode').classList.add('active');
-                }
-                
-                // Toggle descriptions
-                document.getElementById('preset-description').style.display = currentMode === 'preset' ? 'block' : 'none';
-                document.getElementById('design-description').style.display = currentMode === 'design' ? 'block' : 'none';
-                
-                // Toggle API examples
-                document.getElementById('preset-api').style.display = currentMode === 'preset' ? 'block' : 'none';
-                document.getElementById('design-api').style.display = currentMode === 'design' ? 'block' : 'none';
-                
-                // Update button text
-                updateButtonText();
-            });
+        // Toggle mode-specific content
+        document.querySelectorAll('.mode-specific').forEach(el =>el.classList.remove('active'));
+        if (currentMode === 'preset') {
+          document.getElementById('preset-mode').classList.add('active');
+        }
+        
+        // Toggle descriptions
+        document.getElementById('preset-description').style.display = currentMode === 'preset' ? 'block' : 'none';
+        document.getElementById('design-description').style.display = currentMode === 'design' ? 'block' : 'none';
+        
+        // Toggle API examples
+        document.getElementById('preset-api').style.display = currentMode === 'preset' ? 'block' : 'none';
+        document.getElementById('design-api').style.display = currentMode === 'design' ? 'block' : 'none';
+        
+        // Update button text
+        updateButtonText();
+      });
+    });
+    
+    function updateButtonText() {
+      const btn = document.getElementById('generateBtn');
+      if (currentMode === 'preset') {
+        btn.textContent = ' Generate with Preset Voices';
+      } else {
+        btn.textContent = ' Generate with Voice Design';
+      }
+    }
+    
+    // Generate speech
+    document.getElementById('generateBtn').addEventListener('click', async () =>{
+      const text = document.getElementById('text').value.trim();
+      const instruct = document.getElementById('instruct').value.trim();
+      const speaker = document.getElementById('speaker').value;
+      
+      if (!text) {
+        showError('Please enter some text to convert to speech');
+        return;
+      }
+      
+      // Show loading
+      document.getElementById('loading').classList.add('active');
+      document.getElementById('result').classList.remove('active');
+      document.getElementById('error').classList.remove('active');
+      document.getElementById('generateBtn').disabled = true;
+      
+      try {
+        let endpoint, body;
+        
+        if (currentMode === 'preset') {
+          endpoint = '/tts/custom';
+          body = {
+            text: text,
+            speaker: speaker,
+            instruct: instruct || null,
+            format: 'wav'
+          };
+        } else {
+          endpoint = '/tts/design';
+          body = {
+            text: text,
+            instruct: instruct || 'Speak naturally',
+            format: 'wav'
+          };
+        }
+        
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
         });
         
-        function updateButtonText() {
-            const btn = document.getElementById('generateBtn');
-            if (currentMode === 'preset') {
-                btn.textContent = '🎵 Generate with Preset Voices';
-            } else {
-                btn.textContent = '🎨 Generate with Voice Design';
-            }
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP ${response.status}`);
         }
         
-        // Generate speech
-        document.getElementById('generateBtn').addEventListener('click', async () => {
-            const text = document.getElementById('text').value.trim();
-            const instruct = document.getElementById('instruct').value.trim();
-            const speaker = document.getElementById('speaker').value;
-            
-            if (!text) {
-                showError('Please enter some text to convert to speech');
-                return;
-            }
-            
-            // Show loading
-            document.getElementById('loading').classList.add('active');
-            document.getElementById('result').classList.remove('active');
-            document.getElementById('error').classList.remove('active');
-            document.getElementById('generateBtn').disabled = true;
-            
-            try {
-                let endpoint, body;
-                
-                if (currentMode === 'preset') {
-                    endpoint = '/tts/custom';
-                    body = {
-                        text: text,
-                        speaker: speaker,
-                        instruct: instruct || null,
-                        format: 'wav'
-                    };
-                } else {
-                    endpoint = '/tts/design';
-                    body = {
-                        text: text,
-                        instruct: instruct || 'Speak naturally',
-                        format: 'wav'
-                    };
-                }
-                
-                const response = await fetch(`${API_BASE}${endpoint}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(body)
-                });
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || `HTTP ${response.status}`);
-                }
-                
-                const blob = await response.blob();
-                const audioUrl = URL.createObjectURL(blob);
-                
-                // Show result
-                document.getElementById('audioPlayer').src = audioUrl;
-                document.getElementById('downloadBtn').href = audioUrl;
-                document.getElementById('result').classList.add('active');
-                
-                // Auto-play
-                document.getElementById('audioPlayer').play();
-                
-            } catch (err) {
-                showError('Error: ' + err.message);
-            } finally {
-                document.getElementById('loading').classList.remove('active');
-                document.getElementById('generateBtn').disabled = false;
-            }
-        });
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
         
-        function showError(message) {
-            const errorEl = document.getElementById('error');
-            errorEl.textContent = message;
-            errorEl.classList.add('active');
-            setTimeout(() => errorEl.classList.remove('active'), 5000);
-        }
+        // Show result
+        document.getElementById('audioPlayer').src = audioUrl;
+        document.getElementById('downloadBtn').href = audioUrl;
+        document.getElementById('result').classList.add('active');
         
-        // API Toggle
-        function toggleApi() {
-            const content = document.getElementById('apiContent');
-            const icon = document.getElementById('apiToggleIcon');
-            content.classList.toggle('active');
-            icon.classList.toggle('open');
-        }
+        // Auto-play
+        document.getElementById('audioPlayer').play();
         
-        // Copy code function
-        function copyCode(elementId) {
-            const code = document.getElementById(elementId).textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                alert('Copied to clipboard!');
-            });
-        }
-    </script>
+      } catch (err) {
+        showError('Error: ' + err.message);
+      } finally {
+        document.getElementById('loading').classList.remove('active');
+        document.getElementById('generateBtn').disabled = false;
+      }
+    });
+    
+    function showError(message) {
+      const errorEl = document.getElementById('error');
+      errorEl.textContent = message;
+      errorEl.classList.add('active');
+      setTimeout(() =>errorEl.classList.remove('active'), 5000);
+    }
+    
+    // API Toggle
+    function toggleApi() {
+      const content = document.getElementById('apiContent');
+      const icon = document.getElementById('apiToggleIcon');
+      content.classList.toggle('active');
+      icon.classList.toggle('open');
+    }
+    
+    // Copy code function
+    function copyCode(elementId) {
+      const code = document.getElementById(elementId).textContent;
+      navigator.clipboard.writeText(code).then(() =>{
+        alert('Copied to clipboard!');
+      });
+    }
+ </script>
 </body>
 </html>
