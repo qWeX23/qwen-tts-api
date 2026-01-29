@@ -115,8 +115,9 @@ class ModelManager:
         self._custom_lock = threading.Lock()
         self._design_lock = threading.Lock()
         self._base_lock = threading.Lock()
-        
-        if os.getenv("SKIP_MODEL_LOAD") == "1":
+        self._skip_model_load = os.getenv("SKIP_MODEL_LOAD") == "1"
+
+        if self._skip_model_load:
             logger.warning("SKIP_MODEL_LOAD enabled; using dummy TTS model")
             dummy = DummyTTS()
             self.custom_model = dummy
@@ -139,6 +140,8 @@ class ModelManager:
     
     def _load_custom_model(self) -> Any:
         """Lazy load custom voice model"""
+        if self._skip_model_load and self.custom_model is not None:
+            return self.custom_model
         if self._custom_loaded:
             return self.custom_model
         
@@ -161,6 +164,8 @@ class ModelManager:
     
     def _load_design_model(self) -> Any:
         """Lazy load voice design model"""
+        if self._skip_model_load and self.design_model is not None:
+            return self.design_model
         if self._design_loaded:
             return self.design_model
         
@@ -183,6 +188,8 @@ class ModelManager:
     
     def _load_base_model(self) -> Any:
         """Lazy load base/clone model"""
+        if self._skip_model_load and self.base_model is not None:
+            return self.base_model
         if self._base_loaded:
             return self.base_model
         
