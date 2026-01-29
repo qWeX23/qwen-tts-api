@@ -90,9 +90,9 @@ curl -X POST http://localhost:8000/tts/clone \
 | `DEVICE` | `auto` | `auto`, `cpu`, or `cuda:0` |
 | `DTYPE` | `auto` | `auto`, `fp32`, `fp16`, `bf16` |
 | `ATTN_IMPL` | `sdpa` | `sdpa`, `flash_attention_2`, or `auto` |
-| `MODEL_CUSTOM` | `Qwen/Qwen3-TTS-CustomVoice` | Custom voice model ID |
-| `MODEL_DESIGN` | `Qwen/Qwen3-TTS-VoiceDesign` | Voice design model ID |
-| `MODEL_BASE` | `Qwen/Qwen3-TTS-Base` | Base model ID |
+| `MODEL_CUSTOM` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | Custom voice model ID |
+| `MODEL_DESIGN` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` | Voice design model ID |
+| `MODEL_BASE` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Base model ID |
 | `API_KEY` | unset | Require `X-API-Key` header when set |
 | `MAX_TEXT_CHARS` | `2000` | Max input characters |
 | `MAX_CONCURRENT_JOBS` | `1` (GPU) / `2` (CPU) | Limit concurrent inferences |

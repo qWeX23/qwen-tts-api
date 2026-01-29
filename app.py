@@ -118,7 +118,7 @@ class ModelManager:
             return
 
         try:
-            from qwen_tts import QwenTTS  # type: ignore
+            from qwen_tts import Qwen3TTSModel  # type: ignore
         except ImportError as exc:
             raise RuntimeError(
                 "Failed to import qwen_tts. Ensure the Qwen3-TTS package and its "
@@ -127,19 +127,19 @@ class ModelManager:
                 f"{exc}"
             ) from exc
 
-        self.custom_model = QwenTTS.from_pretrained(
+        self.custom_model = Qwen3TTSModel.from_pretrained(
             self.settings.model_custom,
             device=self.settings.device,
             torch_dtype=self.settings.dtype,
             attn_implementation=self.settings.attn_impl,
         )
-        self.design_model = QwenTTS.from_pretrained(
+        self.design_model = Qwen3TTSModel.from_pretrained(
             self.settings.model_design,
             device=self.settings.device,
             torch_dtype=self.settings.dtype,
             attn_implementation=self.settings.attn_impl,
         )
-        self.base_model = QwenTTS.from_pretrained(
+        self.base_model = Qwen3TTSModel.from_pretrained(
             self.settings.model_base,
             device=self.settings.device,
             torch_dtype=self.settings.dtype,
@@ -270,9 +270,9 @@ def parse_settings() -> Settings:
         dtype=dtype,
         dtype_label=dtype_label,
         attn_impl=os.getenv("ATTN_IMPL", "sdpa"),
-        model_custom=os.getenv("MODEL_CUSTOM", "Qwen/Qwen3-TTS-CustomVoice"),
-        model_design=os.getenv("MODEL_DESIGN", "Qwen/Qwen3-TTS-VoiceDesign"),
-        model_base=os.getenv("MODEL_BASE", "Qwen/Qwen3-TTS-Base"),
+        model_custom=os.getenv("MODEL_CUSTOM", "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"),
+        model_design=os.getenv("MODEL_DESIGN", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"),
+        model_base=os.getenv("MODEL_BASE", "Qwen/Qwen3-TTS-12Hz-1.7B-Base"),
         api_key=os.getenv("API_KEY"),
         max_text_chars=max_text_chars,
         max_request_bytes=max_request_bytes,
