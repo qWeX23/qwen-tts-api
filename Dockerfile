@@ -50,6 +50,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir transformers accelerate
+RUN pip uninstall -y torchvision || true
+ENV PYTORCH_ROCM_ARCH="gfx900 gfx906 gfx908 gfx90a gfx940 gfx941 gfx942 gfx1010 gfx1012 gfx1030 gfx1100 gfx1101 gfx1200 gfx1201"
+RUN pip install --no-cache-dir torchvision --index-url https://download.pytorch.org/whl/rocm6.2
 COPY . /app
 EXPOSE 8000
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
