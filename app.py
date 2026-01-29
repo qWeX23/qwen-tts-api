@@ -239,6 +239,16 @@ class ModelManager:
                 speaker=payload.speaker,
                 instruct=payload.instruct
             )
+        if hasattr(model, "synthesize_custom"):
+            return model.synthesize_custom(payload.text, payload.language, payload.speaker, payload.instruct)
+        if hasattr(model, "tts"):
+            return model.tts(
+                text=payload.text,
+                language=payload.language,
+                speaker=payload.speaker,
+                instruct=payload.instruct,
+                mode="custom",
+            )
         raise RuntimeError("Custom voice model does not support synthesis")
 
     def synthesize_design(self, payload: DesignRequest) -> Tuple[np.ndarray, int]:
@@ -248,6 +258,15 @@ class ModelManager:
                 text=payload.text,
                 language=payload.language,
                 instruct=payload.instruct
+            )
+        if hasattr(model, "synthesize_design"):
+            return model.synthesize_design(payload.text, payload.language, payload.instruct)
+        if hasattr(model, "tts"):
+            return model.tts(
+                text=payload.text,
+                language=payload.language,
+                instruct=payload.instruct,
+                mode="design",
             )
         raise RuntimeError("Voice design model does not support synthesis")
 
@@ -262,6 +281,23 @@ class ModelManager:
                 ref_audio=ref_audio,
                 ref_text=payload.ref_text,
                 x_vector_only_mode=payload.x_vector_only_mode,
+            )
+        if hasattr(model, "synthesize_clone"):
+            return model.synthesize_clone(
+                payload.text,
+                payload.language,
+                ref_audio,
+                payload.ref_text,
+                payload.x_vector_only_mode,
+            )
+        if hasattr(model, "tts"):
+            return model.tts(
+                text=payload.text,
+                language=payload.language,
+                ref_audio=ref_audio,
+                ref_text=payload.ref_text,
+                x_vector_only_mode=payload.x_vector_only_mode,
+                mode="clone",
             )
         raise RuntimeError("Voice clone model does not support synthesis")
 
