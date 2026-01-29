@@ -403,9 +403,10 @@ def create_app() -> FastAPI:
 
     async def run_job(func, *args):
         try:
-            await asyncio.wait_for(semaphore.acquire(), timeout=0.001)
+            # Wait up to 60 seconds for a slot (TTS can take 30-180 seconds)
+            await asyncio.wait_for(semaphore.acquire(), timeout=60.0)
         except asyncio.TimeoutError as exc:
-            raise HTTPException(status_code=429, detail="Server busy") from exc
+            raise HTTPException(status_code=429, detail="Server busy - queue full, try again in a minute") from exc
         start = time.time()
         try:
             output = await run_in_threadpool(func, *args)
