@@ -68,7 +68,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          IMAGE="${REGISTRY}/${IMAGE_NAME}"
+          IMAGE="${REGISTRY}/${IMAGE_NAME,,}"
           TAGS="${IMAGE}:${TARGET}-sha-${GITHUB_SHA::7}"
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             TAGS="${TAGS},${IMAGE}:${TARGET}-${GITHUB_REF_NAME}"
