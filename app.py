@@ -234,28 +234,22 @@ class ModelManager:
 
     def synthesize_custom(self, payload: CustomRequest) -> Tuple[np.ndarray, int]:
         model = self._load_custom_model()
-        if hasattr(model, "synthesize_custom"):
-            return model.synthesize_custom(payload.text, payload.language, payload.speaker, payload.instruct)
-        if hasattr(model, "tts"):
-            return model.tts(
+        if hasattr(model, "generate_custom_voice"):
+            return model.generate_custom_voice(
                 text=payload.text,
                 language=payload.language,
                 speaker=payload.speaker,
-                instruct=payload.instruct,
-                mode="custom",
+                instruct=payload.instruct
             )
         raise RuntimeError("Custom voice model does not support synthesis")
 
     def synthesize_design(self, payload: DesignRequest) -> Tuple[np.ndarray, int]:
         model = self._load_design_model()
-        if hasattr(model, "synthesize_design"):
-            return model.synthesize_design(payload.text, payload.language, payload.instruct)
-        if hasattr(model, "tts"):
-            return model.tts(
+        if hasattr(model, "generate_voice_design"):
+            return model.generate_voice_design(
                 text=payload.text,
                 language=payload.language,
-                instruct=payload.instruct,
-                mode="design",
+                instruct=payload.instruct
             )
         raise RuntimeError("Voice design model does not support synthesis")
 
@@ -263,22 +257,13 @@ class ModelManager:
         self, payload: CloneRequest, ref_audio: bytes
     ) -> Tuple[np.ndarray, int]:
         model = self._load_base_model()
-        if hasattr(model, "synthesize_clone"):
-            return model.synthesize_clone(
-                payload.text,
-                payload.language,
-                ref_audio,
-                payload.ref_text,
-                payload.x_vector_only_mode,
-            )
-        if hasattr(model, "tts"):
-            return model.tts(
+        if hasattr(model, "generate_voice_clone"):
+            return model.generate_voice_clone(
                 text=payload.text,
                 language=payload.language,
                 ref_audio=ref_audio,
                 ref_text=payload.ref_text,
                 x_vector_only_mode=payload.x_vector_only_mode,
-                mode="clone",
             )
         raise RuntimeError("Voice clone model does not support synthesis")
 
@@ -355,8 +340,13 @@ def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
 
 
 def normalize_audio_output(output: Any) -> Tuple[np.ndarray, int]:
+    # Qwen3TTS returns (audio_list, sample_rate) where audio_list is a list of numpy arrays
     if isinstance(output, tuple) and len(output) == 2:
-        return output[0], output[1]
+        audio_data, sample_rate = output
+        # If audio_data is a list (batch), take the first item
+        if isinstance(audio_data, list) and len(audio_data) > 0:
+            audio_data = audio_data[0]
+        return np.asarray(audio_data), int(sample_rate)
     if isinstance(output, dict):
         audio = output.get("audio") or output.get("waveform")
         sample_rate = output.get("sampling_rate") or output.get("sample_rate")
@@ -364,7 +354,10 @@ def normalize_audio_output(output: Any) -> Tuple[np.ndarray, int]:
             return np.asarray(audio), int(sample_rate)
     if isinstance(output, np.ndarray):
         return output, 24000
-    raise RuntimeError("Unsupported audio output format from model")
+    if isinstance(output, list) and len(output) > 0:
+        # Handle list of audio arrays
+        return np.asarray(output[0]), 24000
+    raise RuntimeError(f"Unsupported audio output format from model: {type(output)}")
 
 
 def create_app() -> FastAPI:
