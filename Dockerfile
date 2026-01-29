@@ -7,7 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
+        libgomp1 \
         libsndfile1 \
+        sox \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./requirements.txt
 
@@ -25,7 +27,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
+        libgomp1 \
         libsndfile1 \
+        sox \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
@@ -40,7 +44,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
+        libgomp1 \
         libsndfile1 \
+        sox \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt

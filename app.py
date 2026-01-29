@@ -121,7 +121,10 @@ class ModelManager:
             from qwen_tts import QwenTTS  # type: ignore
         except ImportError as exc:
             raise RuntimeError(
-                "qwen_tts package not installed. Install Qwen3-TTS python package or set SKIP_MODEL_LOAD=1."
+                "Failed to import qwen_tts. Ensure the Qwen3-TTS package and its "
+                "dependencies are installed (pip install qwen-tts) and required "
+                "system libraries like sox/libgomp1 are available. Original error: "
+                f"{exc}"
             ) from exc
 
         self.custom_model = QwenTTS.from_pretrained(
