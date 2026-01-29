@@ -103,6 +103,7 @@ curl -X POST http://localhost:8000/tts/clone \
 - **No GPU detected**: verify `nvidia-smi` or `rocminfo` works on the host.
 - **Model download failures**: ensure the container can reach Hugging Face and cache volume is writable.
 - **ROCm errors**: confirm `/dev/kfd` and `/dev/dri` are passed through and the host ROCm stack matches your GPU.
+- **Missing `qwen_tts` dependencies**: ensure the container installs `qwen-tts` and system packages like `sox`/`libgomp1` (rebuild the image after changes). Use `SKIP_MODEL_LOAD=1` only for local testing.
 
 ## Development
 

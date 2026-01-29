@@ -39,3 +39,7 @@ bd sync               # Sync with git
 - If push fails, resolve and retry until it succeeds
 
 Use 'bd' for task tracking
+
+## Build verification
+
+Always attempt to build the Docker image during a work session (for example: `docker build -t qwen-tts-api .`). Note any failures in the handoff summary.
