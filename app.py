@@ -5,6 +5,7 @@ import importlib.util
 import io
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
@@ -106,19 +107,28 @@ class ModelManager:
         self.custom_model: Any = None
         self.design_model: Any = None
         self.base_model: Any = None
-        self._load_models()
-
-    def _load_models(self) -> None:
+        self._custom_loaded = False
+        self._design_loaded = False
+        self._base_loaded = False
+        self._custom_lock = threading.Lock()
+        self._design_lock = threading.Lock()
+        self._base_lock = threading.Lock()
+        
         if os.getenv("SKIP_MODEL_LOAD") == "1":
             logger.warning("SKIP_MODEL_LOAD enabled; using dummy TTS model")
             dummy = DummyTTS()
             self.custom_model = dummy
             self.design_model = dummy
             self.base_model = dummy
-            return
-
+            self._custom_loaded = True
+            self._design_loaded = True
+            self._base_loaded = True
+    
+    def _get_model_class(self):
+        """Lazy import to avoid loading at startup"""
         try:
             from qwen_tts import Qwen3TTSModel  # type: ignore
+            return Qwen3TTSModel
         except ImportError as exc:
             raise RuntimeError(
                 "Failed to import qwen_tts. Ensure the Qwen3-TTS package and its "
@@ -126,47 +136,102 @@ class ModelManager:
                 "system libraries like sox/libgomp1 are available. Original error: "
                 f"{exc}"
             ) from exc
-
-        self.custom_model = Qwen3TTSModel.from_pretrained(
-            self.settings.model_custom,
-            device=self.settings.device,
-            torch_dtype=self.settings.dtype,
-            attn_implementation=self.settings.attn_impl,
-        )
-        self.design_model = Qwen3TTSModel.from_pretrained(
-            self.settings.model_design,
-            device=self.settings.device,
-            torch_dtype=self.settings.dtype,
-            attn_implementation=self.settings.attn_impl,
-        )
-        self.base_model = Qwen3TTSModel.from_pretrained(
-            self.settings.model_base,
-            device=self.settings.device,
-            torch_dtype=self.settings.dtype,
-            attn_implementation=self.settings.attn_impl,
-        )
+    
+    def _load_custom_model(self) -> Any:
+        """Lazy load custom voice model"""
+        if self._custom_loaded:
+            return self.custom_model
+        
+        with self._custom_lock:
+            if self._custom_loaded:
+                return self.custom_model
+            
+            logger.info("Lazy loading custom voice model: %s", self.settings.model_custom)
+            start = time.time()
+            Qwen3TTSModel = self._get_model_class()
+            self.custom_model = Qwen3TTSModel.from_pretrained(
+                self.settings.model_custom,
+                device_map=self.settings.device,
+                torch_dtype=self.settings.dtype,
+                attn_implementation=self.settings.attn_impl,
+            )
+            self._custom_loaded = True
+            logger.info("Custom voice model loaded in %.2f seconds", time.time() - start)
+            return self.custom_model
+    
+    def _load_design_model(self) -> Any:
+        """Lazy load voice design model"""
+        if self._design_loaded:
+            return self.design_model
+        
+        with self._design_lock:
+            if self._design_loaded:
+                return self.design_model
+            
+            logger.info("Lazy loading voice design model: %s", self.settings.model_design)
+            start = time.time()
+            Qwen3TTSModel = self._get_model_class()
+            self.design_model = Qwen3TTSModel.from_pretrained(
+                self.settings.model_design,
+                device_map=self.settings.device,
+                torch_dtype=self.settings.dtype,
+                attn_implementation=self.settings.attn_impl,
+            )
+            self._design_loaded = True
+            logger.info("Voice design model loaded in %.2f seconds", time.time() - start)
+            return self.design_model
+    
+    def _load_base_model(self) -> Any:
+        """Lazy load base/clone model"""
+        if self._base_loaded:
+            return self.base_model
+        
+        with self._base_lock:
+            if self._base_loaded:
+                return self.base_model
+            
+            logger.info("Lazy loading base model: %s", self.settings.model_base)
+            start = time.time()
+            Qwen3TTSModel = self._get_model_class()
+            self.base_model = Qwen3TTSModel.from_pretrained(
+                self.settings.model_base,
+                device_map=self.settings.device,
+                torch_dtype=self.settings.dtype,
+                attn_implementation=self.settings.attn_impl,
+            )
+            self._base_loaded = True
+            logger.info("Base model loaded in %.2f seconds", time.time() - start)
+            return self.base_model
 
     def list_voices(self) -> Tuple[list[str], list[str], Optional[str]]:
         warning = None
-        if self.custom_model is None:
+        
+        # Try to load custom model if not loaded
+        try:
+            model = self._load_custom_model()
+        except Exception as exc:
+            logger.warning("Failed to load custom model for voice listing: %s", exc)
+            return [], [], f"custom model not loaded: {exc}"
+        
+        if model is None:
             return [], [], "custom model not loaded"
 
         for attr in ("list_speakers", "speakers", "speaker_list"):
-            if hasattr(self.custom_model, attr):
-                speakers = getattr(self.custom_model, attr)
+            if hasattr(model, attr):
+                speakers = getattr(model, attr)
                 if callable(speakers):
                     speakers = speakers()
                 languages = []
                 if isinstance(speakers, tuple) and len(speakers) == 2:
                     speakers, languages = speakers
-                if not languages and hasattr(self.custom_model, "languages"):
-                    languages = list(getattr(self.custom_model, "languages"))
+                if not languages and hasattr(model, "languages"):
+                    languages = list(getattr(model, "languages"))
                 return list(speakers), list(languages), None
         warning = "speakers could not be enumerated"
         return [], [], warning
 
     def synthesize_custom(self, payload: CustomRequest) -> Tuple[np.ndarray, int]:
-        model = self.custom_model
+        model = self._load_custom_model()
         if hasattr(model, "synthesize_custom"):
             return model.synthesize_custom(payload.text, payload.language, payload.speaker, payload.instruct)
         if hasattr(model, "tts"):
@@ -180,7 +245,7 @@ class ModelManager:
         raise RuntimeError("Custom voice model does not support synthesis")
 
     def synthesize_design(self, payload: DesignRequest) -> Tuple[np.ndarray, int]:
-        model = self.design_model
+        model = self._load_design_model()
         if hasattr(model, "synthesize_design"):
             return model.synthesize_design(payload.text, payload.language, payload.instruct)
         if hasattr(model, "tts"):
@@ -195,7 +260,7 @@ class ModelManager:
     def synthesize_clone(
         self, payload: CloneRequest, ref_audio: bytes
     ) -> Tuple[np.ndarray, int]:
-        model = self.base_model
+        model = self._load_base_model()
         if hasattr(model, "synthesize_clone"):
             return model.synthesize_clone(
                 payload.text,
@@ -348,17 +413,22 @@ def create_app() -> FastAPI:
         torch_module = get_torch()
         if torch_module and torch_module.cuda.is_available():
             gpu_name = torch_module.cuda.get_device_name(0)
+        
+        # Check which models are loaded
+        manager = app.state.manager
+        models_status = {
+            "custom_loaded": manager._custom_loaded,
+            "design_loaded": manager._design_loaded,
+            "base_loaded": manager._base_loaded,
+        }
+        
         return {
             "ok": True,
             "device": settings.device,
             "dtype": settings.dtype_label,
-            "models_loaded": all(
-                [
-                    app.state.manager.custom_model is not None,
-                    app.state.manager.design_model is not None,
-                    app.state.manager.base_model is not None,
-                ]
-            ),
+            "models_loaded": any([manager._custom_loaded, manager._design_loaded, manager._base_loaded]),
+            "models_status": models_status,
+            "lazy_loading": True,
             "version": settings.app_version,
             "gpu": gpu_name,
         }
