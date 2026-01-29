@@ -450,13 +450,24 @@ def create_app() -> FastAPI:
 
     @app.post("/tts/custom")
     async def tts_custom(payload: CustomRequest) -> Response:
+        logger.info("[TTS-CUSTOM] Request received: speaker=%s text_len=%s", payload.speaker, len(payload.text))
         validate_text(payload.text)
         if payload.format.lower() != "wav":
+            logger.error("[TTS-CUSTOM] Invalid format: %s", payload.format)
             raise HTTPException(status_code=400, detail="Only wav format is supported")
 
+        logger.info("[TTS-CUSTOM] Starting synthesis...")
         output, duration = await run_job(app.state.manager.synthesize_custom, payload)
+        logger.info("[TTS-CUSTOM] Synthesis complete, output type: %s", type(output))
+        
+        logger.info("[TTS-CUSTOM] Normalizing audio output...")
         audio, sample_rate = normalize_audio_output(output)
+        logger.info("[TTS-CUSTOM] Audio normalized: shape=%s sample_rate=%s", getattr(audio, 'shape', 'N/A'), sample_rate)
+        
+        logger.info("[TTS-CUSTOM] Converting to WAV...")
         wav_bytes = audio_to_wav_bytes(audio, sample_rate)
+        logger.info("[TTS-CUSTOM] WAV created: size=%s bytes", len(wav_bytes))
+        
         logger.info(
             "tts_custom duration_ms=%s device=%s success=true",
             int(duration * 1000),
