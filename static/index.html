@@ -677,6 +677,9 @@ Content-Type: audio/wav
           };
         }
         
+         console.log('Sending request to:', `${API_BASE}${endpoint}`);
+        console.log('Request body:', body);
+        
         const response = await fetch(`${API_BASE}${endpoint}`, {
           method: 'POST',
           headers: {
@@ -685,21 +688,55 @@ Content-Type: audio/wav
           body: JSON.stringify(body)
         });
         
+        console.log('Response status:', response.status);
+        console.log('Response headers:', [...response.headers.entries()]);
+        
         if (!response.ok) {
           const errorText = await response.text();
+          console.error('Error response:', errorText);
           throw new Error(errorText || `HTTP ${response.status}`);
         }
         
         const blob = await response.blob();
+        console.log('Received blob size:', blob.size, 'bytes');
+        console.log('Blob type:', blob.type);
+        
+         // Verify we got audio data
+        if (blob.size === 0) {
+          throw new Error('Received empty audio file');
+        }
+        
+        // Use blob directly (it's already from response.blob())
         const audioUrl = URL.createObjectURL(blob);
+        console.log('Created audio URL:', audioUrl);
         
         // Show result
-        document.getElementById('audioPlayer').src = audioUrl;
+        const audioPlayer = document.getElementById('audioPlayer');
+        audioPlayer.src = audioUrl;
         document.getElementById('downloadBtn').href = audioUrl;
         document.getElementById('result').classList.add('active');
         
-        // Auto-play
-        document.getElementById('audioPlayer').play();
+        // Add detailed error handler for audio loading
+        audioPlayer.onerror = function(e) {
+          console.error('Audio load error details:', {
+            error: e,
+            src: audioPlayer.src,
+            networkState: audioPlayer.networkState,
+            readyState: audioPlayer.readyState,
+            errorCode: audioPlayer.error ? audioPlayer.error.code : 'none'
+          });
+          showError('Audio failed to load (Error code: ' + (audioPlayer.error ? audioPlayer.error.code : 'unknown') + '). Try downloading the file instead.');
+        };
+        
+        // Listen for canplaythrough event
+        audioPlayer.oncanplaythrough = function() {
+          console.log('Audio can play through');
+        };
+        
+        // Auto-play with error handling
+        audioPlayer.play().catch(e => {
+          console.log('Auto-play blocked or failed:', e);
+        });
         
       } catch (err) {
         showError('Error: ' + err.message);
