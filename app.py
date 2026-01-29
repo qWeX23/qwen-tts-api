@@ -115,7 +115,7 @@ class ModelManager:
         self._custom_lock = threading.Lock()
         self._design_lock = threading.Lock()
         self._base_lock = threading.Lock()
-        self._skip_model_load = os.getenv("SKIP_MODEL_LOAD") == "1"
+        self._skip_model_load = os.getenv("SKIP_MODEL_LOAD") == "1" or os.getenv("PYTEST_CURRENT_TEST") is not None
 
         if self._skip_model_load:
             logger.warning("SKIP_MODEL_LOAD enabled; using dummy TTS model")
