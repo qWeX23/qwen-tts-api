@@ -112,7 +112,12 @@ Install dependencies:
 pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-Install an appropriate PyTorch build for your hardware (CPU/CUDA/ROCm) before running locally.
+Install an appropriate PyTorch build for your hardware (CPU/CUDA/ROCm) before running locally. We recommend installing torch before the rest of the requirements to avoid pip resolving an incompatible wheel during `qwen-tts` installation.
+
+```bash
+pip install torch==2.3.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
+pip install -r requirements.txt -r requirements-dev.txt
+```
 
 Run tests:
 
