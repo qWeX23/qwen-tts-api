@@ -77,6 +77,13 @@ class CloneRequest(BaseModel):
         return value
 
 
+def parse_bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class DummyTTS:
     def list_speakers(self) -> Tuple[list[str], list[str]]:
         return ["dummy"], ["Auto"]
@@ -115,7 +122,7 @@ class ModelManager:
         self._custom_lock = threading.Lock()
         self._design_lock = threading.Lock()
         self._base_lock = threading.Lock()
-        self._skip_model_load = os.getenv("SKIP_MODEL_LOAD") == "1" or os.getenv("PYTEST_CURRENT_TEST") is not None
+        self._skip_model_load = parse_bool_env("SKIP_MODEL_LOAD") or os.getenv("PYTEST_CURRENT_TEST") is not None
 
         if self._skip_model_load:
             logger.warning("SKIP_MODEL_LOAD enabled; using dummy TTS model")
@@ -137,6 +144,30 @@ class ModelManager:
                 "system libraries like sox/libgomp1 are available. Original error: "
                 f"{exc}"
             ) from exc
+
+    def _model_load_kwargs(self) -> Dict[str, Any]:
+        kwargs: Dict[str, Any] = {
+            "device_map": self.settings.device,
+            "attn_implementation": self.settings.attn_impl,
+        }
+        if self.settings.dtype is not None:
+            kwargs["dtype"] = self.settings.dtype
+        return kwargs
+
+    def _from_pretrained(self, model_id: str) -> Any:
+        Qwen3TTSModel = self._get_model_class()
+        kwargs = self._model_load_kwargs()
+        try:
+            return Qwen3TTSModel.from_pretrained(model_id, **kwargs)
+        except TypeError as exc:
+            if "dtype" not in str(exc):
+                raise
+            if "dtype" not in kwargs:
+                raise
+            legacy_kwargs = dict(kwargs)
+            legacy_kwargs["torch_dtype"] = legacy_kwargs.pop("dtype")
+            logger.info("Retrying model load with torch_dtype for compatibility")
+            return Qwen3TTSModel.from_pretrained(model_id, **legacy_kwargs)
     
     def _load_custom_model(self) -> Any:
         """Lazy load custom voice model"""
@@ -151,13 +182,7 @@ class ModelManager:
             
             logger.info("Lazy loading custom voice model: %s", self.settings.model_custom)
             start = time.time()
-            Qwen3TTSModel = self._get_model_class()
-            self.custom_model = Qwen3TTSModel.from_pretrained(
-                self.settings.model_custom,
-                device_map=self.settings.device,
-                torch_dtype=self.settings.dtype,
-                attn_implementation=self.settings.attn_impl,
-            )
+            self.custom_model = self._from_pretrained(self.settings.model_custom)
             self._custom_loaded = True
             logger.info("Custom voice model loaded in %.2f seconds", time.time() - start)
             return self.custom_model
@@ -175,13 +200,7 @@ class ModelManager:
             
             logger.info("Lazy loading voice design model: %s", self.settings.model_design)
             start = time.time()
-            Qwen3TTSModel = self._get_model_class()
-            self.design_model = Qwen3TTSModel.from_pretrained(
-                self.settings.model_design,
-                device_map=self.settings.device,
-                torch_dtype=self.settings.dtype,
-                attn_implementation=self.settings.attn_impl,
-            )
+            self.design_model = self._from_pretrained(self.settings.model_design)
             self._design_loaded = True
             logger.info("Voice design model loaded in %.2f seconds", time.time() - start)
             return self.design_model
@@ -199,13 +218,7 @@ class ModelManager:
             
             logger.info("Lazy loading base model: %s", self.settings.model_base)
             start = time.time()
-            Qwen3TTSModel = self._get_model_class()
-            self.base_model = Qwen3TTSModel.from_pretrained(
-                self.settings.model_base,
-                device_map=self.settings.device,
-                torch_dtype=self.settings.dtype,
-                attn_implementation=self.settings.attn_impl,
-            )
+            self.base_model = self._from_pretrained(self.settings.model_base)
             self._base_loaded = True
             logger.info("Base model loaded in %.2f seconds", time.time() - start)
             return self.base_model
@@ -334,10 +347,21 @@ def select_dtype(dtype_env: str, device: str) -> Tuple[Any, str]:
             raise ValueError(f"Unsupported dtype: {dtype_env}")
         return mapping[dtype_env], dtype_env
     if device.startswith("cuda") and torch_module.cuda.is_available():
-        if torch_module.cuda.is_bf16_supported():
+        device_index = parse_cuda_device_index(device)
+        capability = torch_module.cuda.get_device_capability(device_index)
+        if capability[0] >= 8 and torch_module.cuda.is_bf16_supported():
             return torch_module.bfloat16, "bf16"
         return torch_module.float16, "fp16"
     return torch_module.float32, "fp32"
+
+
+def parse_cuda_device_index(device: str) -> int:
+    if ":" not in device:
+        return 0
+    try:
+        return int(device.split(":", 1)[1])
+    except ValueError:
+        return 0
 
 
 def get_torch() -> Optional[Any]:
@@ -358,7 +382,7 @@ def parse_settings() -> Settings:
     max_request_bytes = int(os.getenv("MAX_REQUEST_BYTES", str(10 * 1024 * 1024)))
     max_concurrent_default = 2 if device == "cpu" else 1
     max_concurrent_jobs = int(os.getenv("MAX_CONCURRENT_JOBS", str(max_concurrent_default)))
-    return Settings(
+    settings = Settings(
         device=device,
         dtype=dtype,
         dtype_label=dtype_label,
@@ -372,6 +396,14 @@ def parse_settings() -> Settings:
         max_concurrent_jobs=max_concurrent_jobs,
         app_version=os.getenv("APP_VERSION", "0.1.0"),
     )
+    logger.info(
+        "Runtime config: device=%s dtype=%s attn_impl=%s max_concurrent_jobs=%s",
+        settings.device,
+        settings.dtype_label,
+        settings.attn_impl,
+        settings.max_concurrent_jobs,
+    )
+    return settings
 
 
 def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
@@ -471,6 +503,41 @@ def create_app() -> FastAPI:
             async with app.state.queue_lock:
                 app.state.queue_active = max(0, app.state.queue_active - 1)
 
+    async def run_startup_warmup() -> None:
+        if not parse_bool_env("WARMUP_CUSTOM_ON_STARTUP"):
+            return
+
+        warmup_text = os.getenv("WARMUP_TEXT", "Warmup request")
+        warmup_language = os.getenv("WARMUP_LANGUAGE", "Auto")
+        warmup_speaker = os.getenv("WARMUP_SPEAKER")
+
+        logger.info("Startup warmup enabled; preparing custom voice request")
+        try:
+            speakers, _, warning = await run_in_threadpool(app.state.manager.list_voices)
+            if warning:
+                logger.warning("Warmup speaker discovery warning: %s", warning)
+
+            speaker = warmup_speaker or (speakers[0] if speakers else None)
+            if not speaker:
+                logger.warning("Warmup skipped: no speaker available and WARMUP_SPEAKER not set")
+                return
+
+            payload = CustomRequest(text=warmup_text, language=warmup_language, speaker=speaker)
+            output, duration, wait_ms = await run_job(app.state.manager.synthesize_custom, payload)
+            normalize_audio_output(output)
+            logger.info(
+                "Warmup completed: speaker=%s duration_ms=%s queue_wait_ms=%s",
+                speaker,
+                int(duration * 1000),
+                wait_ms,
+            )
+        except Exception:
+            logger.exception("Startup warmup failed")
+
+    @app.on_event("startup")
+    async def startup_warmup() -> None:
+        await run_startup_warmup()
+
     @app.get("/health")
     async def health() -> Dict[str, Any]:
         gpu_name = None
@@ -500,6 +567,7 @@ def create_app() -> FastAPI:
             "models_status": models_status,
             "queue": queue_status,
             "lazy_loading": True,
+            "warmup_on_startup": parse_bool_env("WARMUP_CUSTOM_ON_STARTUP"),
             "version": settings.app_version,
             "gpu": gpu_name,
         }
